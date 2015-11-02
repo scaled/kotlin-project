@@ -83,7 +83,7 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
     buffer.findForward(outputM, start) match {
       case Loc.None => None
       case ploc => try {
-        val file = outputM.group(1)
+        val file = proj.root.path.resolve(outputM.group(1))
         val eline = outputM.group(2).toInt-1
         val ecol = outputM.group(3).toInt-1
         val errPre = outputM.group(4).trim
@@ -95,7 +95,7 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
           desc += buffer.line(pnext).asString
           pnext = pnext.nextStart
         }
-        Some(Compiler.errorVisit(file, Loc(eline, ecol), desc.build()) -> pnext)
+        Some(Compiler.errorVisit(Store(file), Loc(eline, ecol), desc.build()) -> pnext)
       } catch {
         case e :Exception => log.log("Error parsing error buffer", e) ; None
       }
