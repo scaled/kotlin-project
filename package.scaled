@@ -1,0 +1,9 @@
+   name: kotlin-project
+ source: git:https://github.com/scaled/kotlin-project.git
+version: 1.0
+descrip: Provides services for Scaled Kotlin projects.
+ weburl: https://github.com/scaled/kotlin-project
+license: New BSD
+ depend: git:https://github.com/scaled/project-service.git
+ depend: git:https://github.com/scaled/java-project.git
+ depend: git:https://github.com/scaled/pacman.git
