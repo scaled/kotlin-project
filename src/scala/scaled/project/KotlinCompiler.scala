@@ -7,11 +7,11 @@ package scaled.project
 import java.nio.file.{Files, Path}
 import scaled._
 import scaled.pacman.{Pacman, RepoId}
-import scaled.util.{Chars, Errors, SubProcess}
+import scaled.util.{BufferBuilder, Chars, Errors, SubProcess}
 
 object KotlinCompiler {
   // matches: "/foo/bar/baz.kt:LL:CC: some error message"
-  val outputM = Matcher.regexp("""^([^:]+):(\d+):(\d+): (.*)""")
+  val outputM = Matcher.regexp("""^([^:]+):(\d+):(\d+): (warning|error): (.*)""")
 
   /** The default version of kotlinc used if none is specified. */
   val DefaultKotlincVersion = "1.0.0-beta-1038"
@@ -39,13 +39,18 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
 
   // override def reset () {} // NOOP!
 
-  protected def compile (buffer :Buffer, incremental :Boolean) =
-    compile(buffer, incremental, sourceDirs, buildClasspath, outputDir)
+  override def describeOptions (bb :BufferBuilder) {
+    bb.addKeyValue("kotlinc: ", if (kotlincOpts.isEmpty) "<none>" else kotlincOpts.mkString(" "))
+    bb.addKeyValue("kcvers: ", kotlincVers)
+  }
+
+  protected def compile (buffer :Buffer, file :Option[Path]) =
+    compile(buffer, file, sourceDirs, buildClasspath, outputDir)
 
   /** A hook called just before we initiate compilation. */
   protected def willCompile () {}
 
-  protected def compile (buffer :Buffer, increm :Boolean, sourceDirs :Seq[Path],
+  protected def compile (buffer :Buffer, file :Option[Path], sourceDirs :Seq[Path],
                          classpath :Seq[Path], output :Path) = {
     willCompile()
 
@@ -57,36 +62,43 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
 
     // enumerate the to-be-compiled source files
     val sources = Seq.builder[String]()
-    Project.onFiles(sourceDirs,
-                    p => if (p.getFileName.toString endsWith ".kt") sources += p.toString)
+    def addSrc (p :Path) = if (p.getFileName.toString endsWith ".kt") sources += p.toString
+    file match {
+      case None    => Project.onFiles(sourceDirs, addSrc)
+      case Some(p) => addSrc(p)
+    }
 
-    // create our command line
-    val cmd = Seq[String](
-      "java",
-      "-cp",
-      kotlinCompilerPath,
-      "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
-      "-cp",
-      classpath.mkString(pathSep),
-      "-d",
-      output.toString
-    ) ++ kotlincOpts ++ sources
-
-    // fork off a java process to run the kotlin compiler
     val result = Promise[Boolean]()
-    SubProcess(SubProcess.Config(cmd.toArray, cwd=proj.root.path),
-               proj.metaSvc.exec, buffer, result.succeed)
+    if (sources.isEmpty) result.succeed(true)
+    else {
+      // create our command line
+      val cmd = Seq[String](
+        "java",
+        "-cp",
+        kotlinCompilerPath,
+        "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+        "-cp",
+        classpath.mkString(pathSep),
+        "-d",
+        output.toString
+      ) ++ kotlincOpts ++ sources
+
+      // fork off a java process to run the kotlin compiler
+      SubProcess(SubProcess.Config(cmd.toArray, cwd=proj.root.path),
+                 proj.metaSvc.exec, buffer, result.succeed)
+    }
     result
   }
 
-  protected def nextError (buffer :Buffer, start :Loc) = {
+  protected def nextNote (buffer :Buffer, start :Loc) = {
     buffer.findForward(outputM, start) match {
-      case Loc.None => None
+      case Loc.None => Compiler.NoMoreNotes
       case ploc => try {
         val file = proj.root.path.resolve(outputM.group(1))
         val eline = outputM.group(2).toInt-1
         val ecol = outputM.group(3).toInt-1
-        val errPre = outputM.group(4).trim
+        val ekind = outputM.group(4)
+        val errPre = outputM.group(5).trim
         // every line after the path with leading whitespace is part of the message
         val desc = Seq.builder[String]()
         desc += errPre
@@ -95,9 +107,9 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
           desc += buffer.line(pnext).asString
           pnext = pnext.nextStart
         }
-        Some(Compiler.errorVisit(Store(file), Loc(eline, ecol), desc.build()) -> pnext)
+        (Compiler.Note(Store(file), Loc(eline, ecol), desc.build(), ekind == "error"), pnext)
       } catch {
-        case e :Exception => log.log("Error parsing error buffer", e) ; None
+        case e :Exception => log.log("Error parsing error buffer", e) ; Compiler.NoMoreNotes
       }
     }
   }
