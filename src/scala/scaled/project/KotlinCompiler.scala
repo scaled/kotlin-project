@@ -34,6 +34,9 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
   /** The version of the Kotlin compiler to use. */
   def kotlincVers :String = DefaultKotlincVersion
 
+  /** The module name to supply to the kotlin compiler. */
+  def moduleName :Option[String] = None
+
   val log = proj.metaSvc.log
   // val compileSvc = proj.metaSvc.service[KotlinCompilerService]
 
@@ -68,6 +71,11 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
       case Some(p) => addSrc(p)
     }
 
+    val moduleOpts = moduleName match {
+      case Some(name) => Seq("-module-name", name)
+      case None       => Seq()
+    }
+
     val result = Promise[Boolean]()
     if (sources.isEmpty) result.succeed(true)
     else {
@@ -81,7 +89,7 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
         classpath.mkString(pathSep),
         "-d",
         output.toString
-      ) ++ kotlincOpts ++ sources
+      ) ++ kotlincOpts ++ moduleOpts ++ sources
 
       // fork off a java process to run the kotlin compiler
       SubProcess(SubProcess.Config(cmd.toArray, cwd=proj.root.path),
