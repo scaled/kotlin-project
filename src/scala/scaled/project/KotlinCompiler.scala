@@ -6,7 +6,7 @@ package scaled.project
 
 import java.nio.file.{Files, Path}
 import scaled._
-import scaled.pacman.{Pacman, RepoId}
+import scaled.pacman.{Pacman, RepoId, Filez}
 import scaled.util.{BufferBuilder, Chars, Errors, SubProcess}
 
 object KotlinCompiler {
@@ -55,6 +55,13 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
 
   protected def compile (buffer :Buffer, file :Option[Path], sourceDirs :Seq[Path],
                          classpath :Seq[Path], output :Path) = {
+    // if we're not doing an incremental recompile, clean the output dir first
+    if (!file.isDefined) {
+      Filez.deleteAll(outputDir)
+      Files.createDirectory(outputDir)
+    }
+
+    // now call down to the project which may copy things back into the output dir
     willCompile()
 
     // resolve the appropriate version of kotlinc
