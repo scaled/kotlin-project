@@ -58,7 +58,7 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
     // if we're not doing an incremental recompile, clean the output dir first
     if (!file.isDefined) {
       Filez.deleteAll(outputDir)
-      Files.createDirectory(outputDir)
+      Files.createDirectories(outputDir)
     }
 
     // now call down to the project which may copy things back into the output dir
