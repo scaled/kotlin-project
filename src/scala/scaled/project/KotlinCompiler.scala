@@ -17,20 +17,13 @@ object KotlinCompiler {
   val DefaultKotlincVersion = "1.0.0-beta-1038"
 }
 
-abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
+abstract class KotlinCompiler (proj :Project, java :JavaComponent) extends Compiler(proj) {
   import KotlinCompiler._
 
-  /** The source directories. */
-  def sourceDirs :Seq[Path]
-  /** The build classpath. */
-  def buildClasspath :Seq[Path]
-  /** The directory in which classes will be written. */
-  def outputDir :Path
-
   /** Options to pass to `javac`. */
-  def javacOpts :Seq[String] = Seq()
+  def javacOpts :SeqV[String] = Seq()
   /** Options to pass to `kotlinc`. */
-  def kotlincOpts :Seq[String] = Seq()
+  def kotlincOpts :SeqV[String] = Seq()
   /** The version of the Kotlin compiler to use. */
   def kotlincVers :String = DefaultKotlincVersion
 
@@ -48,17 +41,17 @@ abstract class KotlinCompiler (proj :Project) extends Compiler(proj) {
   }
 
   protected def compile (buffer :Buffer, file :Option[Path]) =
-    compile(buffer, file, sourceDirs, buildClasspath, outputDir)
+   compile(buffer, file, proj.sourceDirs, java.buildClasspath, java.outputDir)
 
   /** A hook called just before we initiate compilation. */
   protected def willCompile () {}
 
-  protected def compile (buffer :Buffer, file :Option[Path], sourceDirs :Seq[Path],
-                         classpath :Seq[Path], output :Path) = {
+  protected def compile (buffer :Buffer, file :Option[Path], sourceDirs :SeqV[Path],
+                         classpath :SeqV[Path], output :Path) = {
     // if we're not doing an incremental recompile, clean the output dir first
     if (!file.isDefined) {
-      Filez.deleteAll(outputDir)
-      Files.createDirectories(outputDir)
+      Filez.deleteAll(java.outputDir)
+      Files.createDirectories(java.outputDir)
     }
 
     // now call down to the project which may copy things back into the output dir
