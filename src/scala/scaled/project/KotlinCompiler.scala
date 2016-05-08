@@ -35,6 +35,8 @@ abstract class KotlinCompiler (proj :Project, java :JavaComponent) extends Compi
 
   // override def reset () {} // NOOP!
 
+  override def describeEngine = "kotlic"
+
   override def describeOptions (bb :BufferBuilder) {
     bb.addKeyValue("kotlinc: ", if (kotlincOpts.isEmpty) "<none>" else kotlincOpts.mkString(" "))
     bb.addKeyValue("kcvers: ", kotlincVers)
